@@ -12,81 +12,43 @@ const STORAGE_KEY_SESSIONS = 'muse_ai_sessions_v1';
 const STORAGE_KEY_SETTINGS = 'muse_ai_settings_v1';
 const INITIAL_TOKENS = 1_000_000_000;
 
-function createInitialSession(persona: PersonaId = 'general'): ChatSession {
+const DEFAULT_SESSION: ChatSession = {
+  id: 'chat-initial',
+  title: 'New Conversation',
+  persona: 'general',
+  createdAt: 0,
+  updatedAt: 0,
+  messages: [],
+};
+
+const DEFAULT_SETTINGS: UserSettings = {
+  apiProvider: 'simulated',
+  streamingSpeed: 18,
+  enableVoice: true,
+  theme: 'dark',
+  activeTokens: INITIAL_TOKENS,
+  claimedCode: '4NV0PE',
+  userName: 'Jawad Shoaib',
+};
+
+function createNewSession(persona: PersonaId = 'general'): ChatSession {
+  const now = Date.now();
   return {
-    id: `chat-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+    id: `chat-${now}-${Math.random().toString(36).substring(2, 7)}`,
     title: 'New Conversation',
     persona,
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
+    createdAt: now,
+    updatedAt: now,
     messages: [],
   };
 }
 
 export default function Home() {
-  const [sessions, setSessions] = useState<ChatSession[]>(() => {
-    if (typeof window === 'undefined') return [createInitialSession()];
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY_SESSIONS);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-    } catch {
-      // fallback
-    }
-    return [createInitialSession()];
-  });
-
-  const [activeSessionId, setActiveSessionId] = useState<string | null>(() => {
-    if (typeof window === 'undefined') return null;
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY_SESSIONS);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed[0].id;
-      }
-    } catch {
-      // fallback
-    }
-    return null;
-  });
-
-  const [settings, setSettings] = useState<UserSettings>(() => {
-    const defaultSettings: UserSettings = {
-      apiProvider: 'simulated',
-      streamingSpeed: 18,
-      enableVoice: true,
-      theme: 'dark',
-      activeTokens: INITIAL_TOKENS,
-      claimedCode: '4NV0PE',
-      userName: 'Jawad Shoaib',
-    };
-    if (typeof window === 'undefined') return defaultSettings;
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY_SETTINGS);
-      if (saved) {
-        return { ...defaultSettings, ...JSON.parse(saved), userName: JSON.parse(saved).userName || 'Jawad Shoaib' };
-      }
-    } catch {
-      // fallback
-    }
-    return defaultSettings;
-  });
-
-  const [remainingTokens, setRemainingTokens] = useState<number>(() => {
-    if (typeof window === 'undefined') return INITIAL_TOKENS;
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY_SETTINGS);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (typeof parsed.activeTokens === 'number') return parsed.activeTokens;
-      }
-    } catch {
-      // fallback
-    }
-    return INITIAL_TOKENS;
-  });
+  const [sessions, setSessions] = useState<ChatSession[]>([DEFAULT_SESSION]);
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(DEFAULT_SESSION.id);
+  const [settings, setSettings] = useState<UserSettings>(DEFAULT_SETTINGS);
+  const [remainingTokens, setRemainingTokens] = useState<number>(INITIAL_TOKENS);
+  const [isHydrated, setIsHydrated] = useState(false);
 
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isRedeemOpen, setIsRedeemOpen] = useState(false);
@@ -98,26 +60,58 @@ export default function Home() {
   const [streamingThinking, setStreamingThinking] = useState<string | undefined>(undefined);
   const streamIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Load persisted state from localStorage on client mount
+  useEffect(() => {
+    try {
+      const savedSessions = localStorage.getItem(STORAGE_KEY_SESSIONS);
+      if (savedSessions) {
+        const parsed = JSON.parse(savedSessions);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setSessions(parsed);
+          setActiveSessionId(parsed[0].id);
+        }
+      }
+
+      const savedSettings = localStorage.getItem(STORAGE_KEY_SETTINGS);
+      if (savedSettings) {
+        const parsed = JSON.parse(savedSettings);
+        setSettings((prev) => ({
+          ...prev,
+          ...parsed,
+          userName: parsed.userName || 'Jawad Shoaib',
+        }));
+        if (typeof parsed.activeTokens === 'number') {
+          setRemainingTokens(parsed.activeTokens);
+        }
+      }
+    } catch {
+      // fallback
+    }
+    setIsHydrated(true);
+  }, []);
+
   const createNewChat = useCallback((persona: PersonaId = 'general') => {
-    const newSession = createInitialSession(persona);
+    const newSession = createNewSession(persona);
     setSessions((prev) => [newSession, ...prev]);
     setActiveSessionId(newSession.id);
   }, []);
 
-  // Save sessions to localStorage
+  // Save sessions to localStorage only after hydration
   useEffect(() => {
+    if (!isHydrated) return;
     if (sessions.length > 0) {
       localStorage.setItem(STORAGE_KEY_SESSIONS, JSON.stringify(sessions));
     }
-  }, [sessions]);
+  }, [sessions, isHydrated]);
 
-  // Save settings to localStorage
+  // Save settings to localStorage only after hydration
   useEffect(() => {
+    if (!isHydrated) return;
     localStorage.setItem(
       STORAGE_KEY_SETTINGS,
       JSON.stringify({ ...settings, activeTokens: remainingTokens })
     );
-  }, [settings, remainingTokens]);
+  }, [settings, remainingTokens, isHydrated]);
 
   // Keyboard shortcut: Ctrl+K / Cmd+K for new chat
   useEffect(() => {

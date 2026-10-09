@@ -8,6 +8,8 @@
   --gold-deep: #aa771c;
   --surface-dark: #12100d;
   --surface-border: rgba(212, 175, 55, 0.18);
+  --font-geist-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-geist-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 }
 
 body {
